@@ -382,6 +382,14 @@ public:
         
         person_alarm_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>(
             "/person_alarm", 10);
+
+        // Create subscriber for person_width_exceeded topic
+        person_width_exceeded_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+            "/person_width_exceeded", 
+            10,
+            std::bind(&PatrolManager::person_width_callback, this, std::placeholders::_1)
+        );
+
         
         twist_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(
             "/cmd_vel", 1);
@@ -391,9 +399,7 @@ public:
             "/start_patrol", 1,
             std::bind(&PatrolManager::startCallback, this, std::placeholders::_1));
         
-        objects_string_sub_ = this->create_subscription<std_msgs::msg::String>(
-            "/objects_string_detections", 1,
-            std::bind(&PatrolManager::objectsCallback, this, std::placeholders::_1));
+       
         
         // Initialize service client
         clear_costmaps_client_ = this->create_client<std_srvs::srv::Empty>(
@@ -430,6 +436,13 @@ public:
     //         }
     //     }
     // }
+
+     void person_width_callback(const std_msgs::msg::Bool::SharedPtr msg)
+    {   
+
+        person_alarm_ = msg->data;
+        
+    }
 
     
     void run2(){
@@ -479,21 +492,23 @@ public:
         }
         
         while (rclcpp::ok())
-        {
+        {   
+            rclcpp::spin_some(shared_from_this());
+
+            cerr<<" person_alarm_ "<<person_alarm_<<endl;
+
             publishWaypointsWithStatus();
 
             for (int i = 0; i < waypoints_.size(); i++) {
                 
-                cerr<<" staring waypoint "<<i<<endl;
+                rclcpp::spin_some(shared_from_this());
 
-                publishPersonAlarm();				
-                
+                publishPersonAlarm();			                
 
                 if (person_alarm_) {
 
                     // The robot waits for the person to pass
                     while(rclcpp::ok()) {
-
 
                         rclcpp::spin_some(shared_from_this());
 
@@ -517,7 +532,9 @@ public:
                     // auto start_time = std::chrono::steady_clock::now();
                     while (rclcpp::ok() && nav_manager->isGoalActive()) {
                         
-                        rclcpp::spin_some(nav_manager);
+                        // rclcpp::spin_some(nav_manager);
+
+                        rclcpp::spin_some(shared_from_this());
 
                         updateRobotLocation();
 
@@ -684,50 +701,7 @@ private:
         // goals_marker_array_publisher_->publish(markers);
     }
 
-    void objectsCallback(const std_msgs::msg::String::SharedPtr msg) {
-        // if (msg->data == "") {
-        //     auto now = std::chrono::steady_clock::now();
-        //     auto duration_without_person = std::chrono::duration_c  ast<std::chrono::seconds>(
-        //         now - last_time_detected_).count();
-            
-        //     if (duration_without_person < DURATION_WITHOUT_PERSONS_THRESHOLD) {
-        //         person_alarm_ = true;
-        //     } else {
-        //         person_alarm_ = false;
-        //     }
-        //     return;
-        // }
-        
-        // // Parse the input string and get the vector of objects
-        // std::vector<ObjectDnn> objectVector = parseObjects(msg->data);
-        
-        // // Display the parsed objects
-        // for (const auto& obj : objectVector) {
-        //     // not a person
-        //     if (obj.id != 1) {
-        //         continue;
-        //     }
-            
-        //     float ratio = image_w_ * (b_box_ratio_);
-        //     double absoluteDegree = pixelToAbsoluteDegree(obj.cx, image_w_, camera_fov_);
-            
-        //     if (obj.width >= ratio) {
-        //         person_alarm_ = true;
-        //         last_time_detected_ = std::chrono::steady_clock::now();
-        //         return;
-        //     }
-        // }
-        
-        // auto now = std::chrono::steady_clock::now();
-        // auto duration_without_person = std::chrono::duration_cast<std::chrono::seconds>(
-        //     now - last_time_detected_).count();
-        
-        // if (duration_without_person < DURATION_WITHOUT_PERSONS_THRESHOLD) {
-        //     person_alarm_ = true;
-        // } else {
-        //     person_alarm_ = false;
-        // }
-    }
+    
 
 
     void startCallback(const std_msgs::msg::Bool::SharedPtr msg) {
@@ -748,6 +722,9 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr goals_marker_array_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr person_alarm_marker_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr twist_pub_;
+
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr person_width_exceeded_sub_;
+
     
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr start_patrol_sub_;

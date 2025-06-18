@@ -25,7 +25,10 @@ RUN apt-get update && \
     python3-pip
 
 
-RUN  pip3 install pyyaml
+RUN pip3 install pyyaml
+
+RUN pip3 install ultralytics opencv-python
+
 
 # Source the ROS environment and build the workspace
 RUN . /opt/ros/humble/setup.sh && \
