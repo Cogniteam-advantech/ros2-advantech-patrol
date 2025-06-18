@@ -1,1 +1,2 @@
-sudo docker build --tag advantech_patrol:humble .
+sudo docker build --no-cache --tag advantech_patrol:humble .
+
