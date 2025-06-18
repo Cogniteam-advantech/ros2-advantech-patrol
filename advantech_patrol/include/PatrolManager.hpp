@@ -40,39 +40,8 @@
 
 using namespace std;
 using namespace cv;
-using namespace std::chrono_literals;
+using namespace std::chrono_literals;   
 
-#define DURATION_WITHOUT_PERSONS_THRESHOLD 2
-
-
-// class PatrolManager : public rclcpp::Node {
-
-// public:
-//     PatrolManager(vector<WayPoint> waypoints);
-//     virtual ~PatrolManager();
-
-//     static void mySigintHandler(int sig);
-//     std::vector<ObjectDnn> parseObjects(const std::string& input);
-//     void setState(RobotState state);
-//     bool checkLocalizationOk();
-//     double distanceCalculate(cv::Point2d p1, cv::Point2d p2);
-//     double pixelToAbsoluteDegree(int pixel, int imageWidth, double cameraFOV);
-//     void publishRobotHistoryPath();
-//     void clearAllCostMaps();
-//     void run();
-
-// private:
-//     void startCallback(const std_msgs::msg::Bool::SharedPtr msg);
-//     void objectsCallback(const std_msgs::msg::String::SharedPtr msg);
-//     void publishPersonAlarm();
-//     void publishWaypointsWithStatus();
-//     bool updateRobotLocation();
-//     void mainLoop();
-
-
-// };
-
-// #endif /* INCLUDE_PATROL_MANAGER_HPP */
 
 
 
@@ -86,19 +55,6 @@ using namespace std::chrono_literals;
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 
-struct ObjectDnn {
-    int id;
-    int cx;
-    int cy;
-    int width;
-    int height;
-
-    void print() {
-        RCLCPP_INFO(rclcpp::get_logger("ObjectDnn"), 
-                   "id:%d cx:%d cy:%d width:%d height:%d", id, cx, cy, width, height);
-    }
-};
-
 struct WayPoint {
     float x = 0.0;
     float y = 0.0;
@@ -106,18 +62,7 @@ struct WayPoint {
     bool status_ = false;
 };
 
-enum RobotState {
-    IDLE = 0,
-    CHARGING = 1,
-    PATROL = 2,
-    NAV_TO_DOCKING_STATION = 3,
-    ERROR = 4
-};
 
-enum DIRECTION { 
-    COUNTER_CLOCKWISE = 1, 
-    CLOCKWISE = -1 
-};
 
 class Nav2GoalManager : public rclcpp::Node
 {
@@ -366,10 +311,8 @@ public:
         
         // Declare and get parameters
         this->declare_parameter("robot_state", "IDLE");
-        this->declare_parameter("b_box_ratio", 0.2);
         
         this->get_parameter("robot_state", robot_state_);
-        this->get_parameter("b_box_ratio", b_box_ratio_);
         
         robot_state_ = "IDLE";
         
@@ -409,35 +352,9 @@ public:
     ~PatrolManager(){
 
     }
-    // void run(){
+   
 
-    //     auto nav_manager = std::make_shared<Nav2GoalManager>();
-    
-    
-    //     // Example: Send a goal to position (2.0, 1.0) with yaw 1.57 (90 degrees)
-    //     if (nav_manager->sendGoal(2.0, 1.0, 1.57)) {
-    //         // Wait for the goal handle to be available
-    //         nav_manager->waitForGoalHandle();
-            
-    //         // Spin for a while to let navigation proceed
-    //         auto start_time = std::chrono::steady_clock::now();
-    //         while (rclcpp::ok() && nav_manager->isGoalActive()) {
-    //             rclcpp::spin_some(nav_manager);
-                
-    //             // Example: Abort goal after 10 seconds for demonstration
-    //             auto elapsed = std::chrono::steady_clock::now() - start_time;
-    //             if (elapsed > std::chrono::seconds(10)) {
-    //                 RCLCPP_INFO(nav_manager->get_logger(), "Aborting goal after 10 seconds");
-    //                 nav_manager->abortGoal();
-    //                 break;
-    //             }
-                
-    //             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    //         }
-    //     }
-    // }
-
-     void person_width_callback(const std_msgs::msg::Bool::SharedPtr msg)
+    void person_width_callback(const std_msgs::msg::Bool::SharedPtr msg)
     {   
 
         person_alarm_ = msg->data;
@@ -493,6 +410,8 @@ public:
         
         while (rclcpp::ok())
         {   
+            rclcpp::spin_some(nav_manager);
+
             rclcpp::spin_some(shared_from_this());
 
             cerr<<" person_alarm_ "<<person_alarm_<<endl;
@@ -500,6 +419,8 @@ public:
             publishWaypointsWithStatus();
 
             for (int i = 0; i < waypoints_.size(); i++) {
+
+                rclcpp::spin_some(nav_manager);
                 
                 rclcpp::spin_some(shared_from_this());
 
@@ -524,60 +445,53 @@ public:
                 //clearAllCostMaps();                
 
                 ///////////
-                if (nav_manager->sendGoal(waypoints_[i].x, waypoints_[i].y, waypoints_[i].rad)) {
-                    // Wait for the goal handle to be available
-                    //nav_manager->waitForGoalHandle();
-                    
-                    // Spin for a while to let navigation proceed
-                    // auto start_time = std::chrono::steady_clock::now();
-                    while (rclcpp::ok() && nav_manager->isGoalActive()) {
-                        
-                        // rclcpp::spin_some(nav_manager);
-
-                        rclcpp::spin_some(shared_from_this());
-
-                        updateRobotLocation();
-
-                        publishWaypointsWithStatus();
-
-                        publishPersonAlarm();
-
-                        if (person_alarm_){
-                           
-                           nav_manager->abortGoal();
-
-                           while(rclcpp::ok()) {                            
-
-                                rclcpp::spin_some(shared_from_this());
-
-                                publishPersonAlarm();
-
-                                if (person_alarm_ == false) {                                   
-
-                                    //clearAllCostMaps();
-
-                                    // The robot continues the navigation to the same point it canceled
-                                    nav_manager->sendGoal(waypoints_[i].x, waypoints_[i].y, waypoints_[i].rad);
-
-                                    break;
-                                } 
-                            }
-
-                        }                       
-
-                        if (nav_manager->isGoalReached()) {
-                            std::cout << "Success!" << std::endl;
-
-                            break;
-                        }
-                        
-                        
-                        
-                    }
-                }
-
-
+                nav_manager->sendGoal(waypoints_[i].x, waypoints_[i].y, waypoints_[i].rad);
                 
+                while (rclcpp::ok() && nav_manager->isGoalActive()) {
+                    
+                    rclcpp::spin_some(nav_manager);
+
+                    rclcpp::spin_some(shared_from_this());
+
+                    updateRobotLocation();
+
+                    publishWaypointsWithStatus();
+
+                    publishPersonAlarm();
+
+                    if (person_alarm_){
+                        
+                        nav_manager->abortGoal();
+
+                        while(rclcpp::ok()) {                            
+
+                            rclcpp::spin_some(shared_from_this());
+
+                            rclcpp::spin_some(nav_manager);
+
+                            publishPersonAlarm();
+
+                            if (person_alarm_ == false) {                                   
+
+                                //clearAllCostMaps();
+
+                                // The robot continues the navigation to the same point it canceled
+                                nav_manager->sendGoal(waypoints_[i].x, waypoints_[i].y, waypoints_[i].rad);
+
+                                break;
+                            } 
+                        }
+
+                    }                       
+
+                    if (nav_manager->isGoalReached()) {
+                        std::cout << "Success!" << std::endl;
+
+                        break;
+                    }    
+                    
+                
+                }                
 
             }
 
