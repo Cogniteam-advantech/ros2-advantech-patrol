@@ -88,3 +88,6 @@ RUN apt-get update && \
 
 
 RUN  pip3 install pyyaml
+
+RUN pip3 install ultralytics opencv-python
+

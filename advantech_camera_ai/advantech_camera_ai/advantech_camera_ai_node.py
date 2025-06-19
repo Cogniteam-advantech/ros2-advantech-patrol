@@ -30,7 +30,7 @@ class YoloPersonDetectionNode(Node):
         # Declare parameters
         self.declare_parameter('camera_index', 0)
         self.declare_parameter('publish_rate', 10.0)  # Hz
-        self.declare_parameter('width_threshold', 500)  # pixels
+        self.declare_parameter('width_threshold', 400)  # pixels
         self.declare_parameter('model_path', default_model_path)  # YOLO model path
         self.declare_parameter('confidence_threshold', 0.5)
         self.declare_parameter('use_cuda', True)  # New parameter for CUDA usage
