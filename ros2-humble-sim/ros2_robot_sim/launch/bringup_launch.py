@@ -19,11 +19,19 @@ def generate_launch_description():
         'navigation_launch.py'
     )
 
-    # Define the node to be launched
+    # Define the ros2_robot_sim node
     ros2_robot_sim_node = Node(
         package='ros2_robot_sim',
         executable='ros2_robot_sim_node', 
         name='ros2_robot_sim_node',
+        output='screen'
+    )
+
+    # Define the advantech camera AI node
+    advantech_camera_ai_node = Node(
+        package='advantech_camera_ai',
+        executable='advantech_camera_ai_node',
+        name='advantech_camera_ai_node',
         output='screen'
     )
 
@@ -39,7 +47,8 @@ def generate_launch_description():
 
     # Create and return the LaunchDescription with all actions
     return LaunchDescription([
-        ros2_robot_sim_node,           # Launch the node
-        first_launch,      # Include first launch file
-        second_launch      # Include second launch file
+        ros2_robot_sim_node,           # Launch the ros2_robot_sim node
+        advantech_camera_ai_node,      # Launch the advantech camera AI node
+        first_launch,                  # Include first launch file
+        second_launch                  # Include second launch file
     ])

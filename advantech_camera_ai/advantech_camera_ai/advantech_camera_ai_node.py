@@ -28,7 +28,7 @@ class YoloPersonDetectionNode(Node):
             default_model_path = 'yolov8n.pt'  # Fallback to download
         
         # Declare parameters
-        self.declare_parameter('camera_index', 0)
+        self.declare_parameter('camera_index', 2)
         self.declare_parameter('publish_rate', 10.0)  # Hz
         self.declare_parameter('width_threshold', 400)  # pixels
         self.declare_parameter('model_path', default_model_path)  # YOLO model path

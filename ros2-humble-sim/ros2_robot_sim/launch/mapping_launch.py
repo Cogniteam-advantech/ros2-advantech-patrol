@@ -83,10 +83,10 @@ def generate_launch_description():
             default_value=os.path.join(bringup_dir, 'nav2_params.yaml'),
             description='Full path to the ROS2 parameters file to use'),
         
-        DeclareLaunchArgument(
-            'slam_params_file',
-            default_value=os.path.join(bringup_dir, 'slam_params.yaml'),
-            description='Full path to the SLAM Toolbox parameters file to use'),
+        # DeclareLaunchArgument(
+        #     'slam_params_file',
+        #     default_value=os.path.join(bringup_dir, 'slam_params.yaml'),
+        #     description='Full path to the SLAM Toolbox parameters file to use'),
         
         # SLAM Toolbox Node
         Node(
@@ -97,12 +97,12 @@ def generate_launch_description():
             parameters=[configured_slam_params],
             remappings=remappings),
         
-        Node(
-            package='nav2_lifecycle_manager',
-            executable='lifecycle_manager',
-            name='lifecycle_manager_slam',
-            output='screen',
-            parameters=[{'use_sim_time': use_sim_time},
-                        {'autostart': autostart},
-                        {'node_names': lifecycle_nodes}])
+        # Node(
+        #     package='nav2_lifecycle_manager',
+        #     executable='lifecycle_manager',
+        #     name='lifecycle_manager_slam',
+        #     output='screen',
+        #     parameters=[{'use_sim_time': use_sim_time},
+        #                 {'autostart': autostart},
+        #                 {'node_names': lifecycle_nodes}])
     ])

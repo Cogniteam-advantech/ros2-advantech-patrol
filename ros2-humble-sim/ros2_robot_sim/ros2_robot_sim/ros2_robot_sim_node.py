@@ -4,14 +4,14 @@ from geometry_msgs.msg import PoseStamped, Point
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from sensor_msgs.msg import Image
-# import numpy as np
+import numpy as np
 import cv2
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge
 import yaml
 from nav_msgs.msg import OccupancyGrid, MapMetaData
 from geometry_msgs.msg import PoseStamped, TransformStamped
-# import tf_transformations
+import tf_transformations
 from tf2_ros import TransformBroadcaster
 from nav2_simple_commander.robot_navigator import BasicNavigator
 from nav_msgs.msg import Path
@@ -34,10 +34,10 @@ class SimNode(Node):
         super().__init__('ros2_robot_sim_node')
         
         
-        self.image_map = cv2.imread("/home/cogniteam-user/advantech_patrol_ws/src/ros2-advantech-patrol/ros2-humble-sim/ros2_robot_sim/resource/map/map.pgm",0)
+        self.image_map = cv2.imread("/ros2_humble_sim_ws/src/ros2-humble-sim/ros2_robot_sim/resource/map/map.pgm",0)
         self.image_map = cv2.flip(self.image_map, 0)
 
-        self.map_info_dict = self.load_map_yaml("/home/cogniteam-user/advantech_patrol_ws/src/ros2-advantech-patrol/ros2-humble-sim/ros2_robot_sim/resource/map/map.yaml")
+        self.map_info_dict = self.load_map_yaml("/ros2_humble_sim_ws/src/ros2-humble-sim/ros2_robot_sim/resource/map/map.yaml")
         
         self.max_lin_vel = 1.0
         self.min_lin_vel = -1.0
@@ -126,6 +126,7 @@ class SimNode(Node):
         # Timer to publish odometry
         self.odom_timer = self.create_timer(0.1, self.publish_odometry, self.timer_group)
         
+        self.cloud_timer = self.create_timer(1, self.publish_point_cloud, self.cloud_group)
         
 
         # self.map_publisher = self.create_publisher(OccupancyGrid, '/map', 10)
@@ -248,7 +249,60 @@ class SimNode(Node):
         # Return None if no black pixel was found
         return None, None
 
-    
+    def publish_compressed_image(self):
+        # Create a blank image with RGB background color (230, 0, 126)
+        img = np.zeros((400, 400, 3), np.uint8)
+        img[:] = (126, 0, 230)  # Set the entire image to the background color
+
+        # Get the current time
+        current_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+        # Add the timestamp to the top-left corner of the image
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        font_color = (255, 255, 255)  # White
+        thickness = 2
+        position = (10, 30)  # Top-left corner
+        cv2.putText(img, current_time, position, font, font_scale, font_color, thickness)
+
+        # Calculate the center of the image and draw the arrow
+        center = (200, 200)  # Center of the image
+        length = 100  # Length of the arrow
+
+        yaw_angle = 0.0
+        if self.robot_pose is not None:
+            
+            # Extract quaternion from the PoseStamped message
+            orientation_q = self.robot_pose.pose.orientation
+
+            # Convert quaternion to Euler angles
+            quaternion = (
+                orientation_q.x,
+                orientation_q.y,
+                orientation_q.z,
+                orientation_q.w
+            )
+            euler = tf_transformations.euler_from_quaternion(quaternion)
+
+            # Yaw is the third value in the returned tuple (roll, pitch, yaw)
+            yaw_angle = euler[2]
+            
+        # Calculate the end point of the arrow based on the yaw angle
+        arrow_angle = yaw_angle  # Negative to account for coordinate system
+        end_point = (int(center[0] + length * np.cos(arrow_angle)),
+                     int(center[1] - length * np.sin(arrow_angle)))
+
+        # Draw the arrow (white arrow, thickness of 5)
+        cv2.arrowedLine(img, center, end_point, (255, 255, 255), 5)
+
+        # Convert the OpenCV image to a ROS CompressedImage message
+        compressed_image_msg = CompressedImage()
+        compressed_image_msg.header.stamp = self.get_clock().now().to_msg()
+        compressed_image_msg.format = "jpeg"
+        compressed_image_msg.data = np.array(cv2.imencode('.jpg', img)[1]).tobytes()
+
+        # Publish the compressed image
+        self.image_publisher.publish(compressed_image_msg)
         
     def markers_callback(self, msg):
         
@@ -311,60 +365,16 @@ class SimNode(Node):
 
         self.battery_voltage_publisher.publish(msg)
         
-    def quaternion_to_euler(self, x, y, z, w):
-        """
-        Convert a quaternion into euler angles (roll, pitch, yaw)
-        roll is rotation around x in radians (counterclockwise)
-        pitch is rotation around y in radians (counterclockwise)
-        yaw is rotation around z in radians (counterclockwise)
-        """
-        # Roll (x-axis rotation)
-        sinr_cosp = 2 * (w * x + y * z)
-        cosr_cosp = 1 - 2 * (x * x + y * y)
-        roll = math.atan2(sinr_cosp, cosr_cosp)
-
-        # Pitch (y-axis rotation)
-        sinp = 2 * (w * y - z * x)
-        if abs(sinp) >= 1:
-            pitch = math.copysign(math.pi / 2, sinp)  # Use 90 degrees if out of range
-        else:
-            pitch = math.asin(sinp)
-
-        # Yaw (z-axis rotation)
-        siny_cosp = 2 * (w * z + x * y)
-        cosy_cosp = 1 - 2 * (y * y + z * z)
-        yaw = math.atan2(siny_cosp, cosy_cosp)
-
-        return roll, pitch, yaw
-
-    def euler_to_quaternion(self, roll, pitch, yaw):
-        """
-        Convert an Euler angle to a quaternion.
-        
-        Input
-            :param roll: The roll (rotation around x-axis) angle in radians.
-            :param pitch: The pitch (rotation around y-axis) angle in radians.
-            :param yaw: The yaw (rotation around z-axis) angle in radians.
-        
-        Output
-            :return qx, qy, qz, qw: The orientation in quaternion [x,y,z,w] format
-        """
-        qx = math.sin(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) - math.cos(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
-        qy = math.cos(roll/2) * math.sin(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.cos(pitch/2) * math.sin(yaw/2)
-        qz = math.cos(roll/2) * math.cos(pitch/2) * math.sin(yaw/2) - math.sin(roll/2) * math.sin(pitch/2) * math.cos(yaw/2)
-        qw = math.cos(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
-        
-        return qx, qy, qz, qw
-
     def apply_twist_to_pose(self, twist, delta_time):
         # Extract the current position and orientation
         x = self.robot_pose.pose.position.x
         y = self.robot_pose.pose.position.y
         z = self.robot_pose.pose.position.z
         orientation = self.robot_pose.pose.orientation
+        q = [orientation.x, orientation.y, orientation.z, orientation.w]
 
         # Convert orientation quaternion to Euler angles
-        _, _, yaw = self.quaternion_to_euler(orientation.x, orientation.y, orientation.z, orientation.w)
+        _, _, yaw = tf_transformations.euler_from_quaternion(q)
 
         # Linear velocities (in the robot's local frame)
         linear_x = twist.linear.x
@@ -383,19 +393,19 @@ class SimNode(Node):
         z += linear_z * delta_time
 
         # Convert the updated yaw back to a quaternion
-        new_qx, new_qy, new_qz, new_qw = self.euler_to_quaternion(0, 0, yaw)
+        new_orientation = tf_transformations.quaternion_from_euler(0, 0, yaw)
 
         # Update the PoseStamped message
-        self.robot_pose = PoseStamped()
+        self.robot_pose  = PoseStamped()
         self.robot_pose.header.frame_id = self.global_frame
         self.robot_pose.header.stamp = self.get_clock().now().to_msg()
         self.robot_pose.pose.position.x = x
         self.robot_pose.pose.position.y = y
         self.robot_pose.pose.position.z = z
-        self.robot_pose.pose.orientation.x = new_qx
-        self.robot_pose.pose.orientation.y = new_qy
-        self.robot_pose.pose.orientation.z = new_qz
-        self.robot_pose.pose.orientation.w = new_qw
+        self.robot_pose.pose.orientation.x = new_orientation[0]
+        self.robot_pose.pose.orientation.y = new_orientation[1]
+        self.robot_pose.pose.orientation.z = new_orientation[2]
+        self.robot_pose.pose.orientation.w = new_orientation[3]
 
 
     def set_initial_pose(self):
@@ -407,7 +417,7 @@ class SimNode(Node):
         self.robot_pose.header.stamp = Time()
 
         # Set the position
-        self.robot_pose.pose.position.x = -3.0
+        self.robot_pose.pose.position.x = -2.91037
         self.robot_pose.pose.position.y = 0.0
         self.robot_pose.pose.position.z = 0.0
 
@@ -590,15 +600,89 @@ class SimNode(Node):
             self.robot_pose_publisher.publish(self.robot_pose)
 
     
-    
+    def publish_point_cloud(self):
+        
+        x_pix_robot ,y_pix_robot  = self.convert_pose_to_pix(self.robot_pose)
+
+        points = []
+        for deg in range(360):
+            scan_pix, distnace_from_robot = self.raycast_to_black_pixel(self.image_map, (x_pix_robot,y_pix_robot), deg, 0)
+            if scan_pix == None:
+                continue
+            else:
+                pose = self.convert_pix_to_pose(scan_pix)
+                
+                points.append([
+                    pose.pose.position.x,
+                    pose.pose.position.y,
+                    0.3
+                ])
+                points.append([
+                    pose.pose.position.x,
+                    pose.pose.position.y,
+                    0.4
+                ])
+                points.append([
+                    pose.pose.position.x,
+                    pose.pose.position.y,
+                    0.5
+                ])
+
+        # Convert to numpy array for point cloud creation
+        points = np.array(points, dtype=np.float32)
+
+        # Create the PointCloud2 message
+        header = Header()
+        header.stamp = self.get_clock().now().to_msg()
+        header.frame_id = self.global_frame
+
+        pointcloud_msg = pc2.create_cloud_xyz32(header, points)
+        
+        # Publish the PointCloud2 message
+        self.cloud_publisher.publish(pointcloud_msg)
+        
+        
+        # Define parameters for the LaserScan
+        laser_scan = LaserScan()
+        laser_scan.header = Header()
+        laser_scan.header.stamp = self.get_clock().now().to_msg()
+        laser_scan.header.frame_id = self.global_frame
+        laser_scan.angle_min = -np.pi   # -90 degrees
+        laser_scan.angle_max = np.pi    # 90 degrees
+        laser_scan.angle_increment = np.pi / 180  # 1 degree
+        laser_scan.time_increment = 0.0
+        laser_scan.range_min = 0.05
+        laser_scan.range_max = 1000.0
+
+        # Filter points to be within a certain angle and distance
+        num_readings = int((laser_scan.angle_max - laser_scan.angle_min) / laser_scan.angle_increment) + 1
+        laser_scan.ranges = [float('inf')] * num_readings  # Initialize ranges
+
+        for point in points:
+            x, y, z = point
+
+            # Calculate angle and range
+            angle = np.arctan2(y, x)  # Angle in radians
+            range_value = np.sqrt(x**2 + y**2)  # Euclidean distance
+
+            # Check if the point is within the defined angle range
+            if laser_scan.angle_min <= angle <= laser_scan.angle_max:
+                index = int((angle - laser_scan.angle_min) / laser_scan.angle_increment)
+                # Update range only if it is less than the current value
+                if range_value < laser_scan.ranges[index]:
+                    laser_scan.ranges[index] = range_value
+
+        # Publish the LaserScan message
+        self.scan_publisher.publish(laser_scan)
             
-    def create_laserscan_from_dict(self, distance_dict, angle_min=-math.pi, angle_max=math.pi, range_min=0.0, range_max=1000.0):
+    def create_laserscan_from_dict(self, distance_dict, angle_min=-np.pi, angle_max=np.pi, range_min=0.0, range_max=1000.0):
+      
         # Initialize LaserScan message
         scan = LaserScan()
         scan.header.frame_id = self.global_frame
         scan.angle_min = angle_min
         scan.angle_max = angle_max
-        scan.angle_increment = math.radians(1)  # 1 degree increments using math.radians
+        scan.angle_increment = np.deg2rad(1)  # Assuming 1 degree increments
         scan.range_min = range_min
         scan.range_max = range_max
 
@@ -614,9 +698,9 @@ class SimNode(Node):
                 index = int((math.radians(angle) - angle_min) / scan.angle_increment)
                 
                 if distance == 0.0:
-                    scan.ranges[index] = float('inf')  # Use float('inf') instead of string
-                    
-                if index >= num_readings:  # Changed from > 360 to >= num_readings for proper bounds checking
+                   scan.ranges[index] = 'inf'
+                   
+                if index > 360:
                     continue
                 scan.ranges[index] = min(distance, range_max)  # Clamp to range_max
 
@@ -678,5 +762,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
-
