@@ -44,11 +44,6 @@ RUN apt-get install build-essential git cmake libasio-dev -y
 
 RUN apt install ros-humble-tf2-geometry-msgs -y
 
-# Cloning this repository into your workspace
-RUN mkdir -p ~/tracer_driver_ws/src
-WORKDIR /root/tracer_driver_ws/src
-RUN git clone https://github.com/westonrobot/ugv_sdk.git
-RUN git clone https://github.com/agilexrobotics/tracer_ros2.git
 
 
 RUN apt install -y can-utils iproute2
