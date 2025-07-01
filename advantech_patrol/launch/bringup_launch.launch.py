@@ -19,19 +19,16 @@ def generate_launch_description():
         'navigation_launch.launch.py'
     )
 
-    # Define the RPLidar A2 node
-    rplidar_node = Node(
-        package='rplidar_ros',
-        executable='rplidar_composition',
-        name='rplidar_node',
-        output='screen',
-        parameters=[{
-            'serial_port': '/dev/ttyUSB0',
-            'serial_baudrate': 115200,
-            'frame_id': 'laser',
-            'inverted': False,
-            'angle_compensate': True,
-        }]
+    rplidar_launch = os.path.join(
+        get_package_share_directory('sllidar_ros2'),
+        'launch',
+        'sllidar_a2m8_launch.py'
+    )
+
+    tf_to_poses_launch = os.path.join(
+        get_package_share_directory('tf_to_poses'),
+        'launch',
+        'bringup_launch.py'
     )
 
     # Define the Advantech Patrol node
@@ -59,13 +56,22 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(nav2_launch)
     )
 
+    rplidar_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(rplidar_launch)
+    )
+
+    tf_to_poses_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(tf_to_poses_launch)
+    )
+
 
 
     # Create and return the LaunchDescription with all actions
     return LaunchDescription([
-        rplidar_node,           # Launch the RPLidar A2 node
         advantech_patrol_node,  # Launch the Advantech Patrol node
         advantech_camera_ai_node,
         slam_async_launch,      # Include SLAM Toolbox async launch
-        nav2_launch
+        nav2_launch,
+        rplidar_launch,
+        tf_to_poses_launch
     ])  
