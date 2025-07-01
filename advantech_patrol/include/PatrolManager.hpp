@@ -362,9 +362,8 @@ public:
     }
 
     
-    void run2(){
+    void run(){
 
-        start_patrol_cmd_ = true;
 
         auto nav_manager = std::make_shared<Nav2GoalManager>();
 

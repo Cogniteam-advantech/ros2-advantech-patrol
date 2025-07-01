@@ -72,7 +72,7 @@ int main(int argc, char** argv)
     
     auto node = std::make_shared<PatrolManager>();
 
-    node->run2();                      // setup logic
+    node->run();                      // setup logic
     rclcpp::spin(node);   
     rclcpp::shutdown();     
     
