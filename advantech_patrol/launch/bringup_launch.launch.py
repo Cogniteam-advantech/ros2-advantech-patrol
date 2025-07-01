@@ -13,6 +13,12 @@ def generate_launch_description():
         'online_async_launch.py'
     )
 
+    tracer_launch = os.path.join(
+        get_package_share_directory('tracer_base'),
+        'launch',
+        'tracer_mini_base.launch.py'
+    )
+
     nav2_launch = os.path.join(
         get_package_share_directory('advantech_patrol'),
         'launch',
@@ -52,6 +58,13 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(slam_toolbox_async_launch)
     )
 
+    tracer_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(tracer_launch)
+    )
+
+    
+
+
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(nav2_launch)
     )
@@ -71,6 +84,7 @@ def generate_launch_description():
         advantech_patrol_node,  # Launch the Advantech Patrol node
         advantech_camera_ai_node,
         slam_async_launch,      # Include SLAM Toolbox async launch
+        tracer_launch,
         nav2_launch,
         rplidar_launch,
         tf_to_poses_launch
