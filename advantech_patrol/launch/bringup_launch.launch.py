@@ -28,13 +28,29 @@ def generate_launch_description():
     rplidar_launch = os.path.join(
         get_package_share_directory('sllidar_ros2'),
         'launch',
-        'sllidar_a2m8_launch.py'
+        'sllidar_a2m12_launch.py'  # Fixed the extra space in filename
     )
 
     tf_to_poses_launch = os.path.join(
         get_package_share_directory('tf_to_poses'),
         'launch',
         'bringup_launch.py'
+    )
+
+    # Static transform publisher for lidar
+    # 180 degree roll rotation = π radians around x-axis
+    # Translation: 0.4m up in z-axis
+    lidar_static_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='lidar_static_tf_publisher',
+        arguments=[
+            '0', '0', '0.4',        # x, y, z translation
+            '3.14159', '0', '0',    # roll, pitch, yaw (180° roll = π radians)
+            'base_link',            # parent frame
+            'laser'                 # child frame
+        ],
+        output='screen'
     )
 
     # Define the Advantech Patrol node
@@ -53,7 +69,7 @@ def generate_launch_description():
         output='screen'
     )
 
-    # # Include the SLAM Toolbox async launch file
+    # Include the SLAM Toolbox async launch file
     slam_async_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(slam_toolbox_async_launch)
     )
@@ -61,10 +77,7 @@ def generate_launch_description():
     tracer_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(tracer_launch)
     )
-
-    
-
-
+            
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(nav2_launch)
     )
@@ -76,11 +89,10 @@ def generate_launch_description():
     tf_to_poses_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(tf_to_poses_launch)
     )
-
-
-
+   
     # Create and return the LaunchDescription with all actions
     return LaunchDescription([
+        lidar_static_tf,        # Static transform for lidar
         advantech_patrol_node,  # Launch the Advantech Patrol node
         advantech_camera_ai_node,
         slam_async_launch,      # Include SLAM Toolbox async launch
@@ -88,4 +100,4 @@ def generate_launch_description():
         nav2_launch,
         rplidar_launch,
         tf_to_poses_launch
-    ])  
+    ])
