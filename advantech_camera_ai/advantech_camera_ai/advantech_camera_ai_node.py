@@ -16,9 +16,9 @@ import torch
 from ament_index_python.packages import get_package_share_directory
 
 
-class YoloPersonDetectionNode(Node):
+class ZedYoloPersonDetectionNode(Node):
     def __init__(self):
-        super().__init__('yolo_person_detection_node')
+        super().__init__('zed_yolo_person_detection_node')
         
         # Get default model path from package installation
         try:
@@ -35,6 +35,10 @@ class YoloPersonDetectionNode(Node):
         self.declare_parameter('confidence_threshold', 0.5)
         self.declare_parameter('use_cuda', True)  # New parameter for CUDA usage
         self.declare_parameter('force_cpu', False)  # Force CPU usage if needed
+        # ZED-specific parameters
+        self.declare_parameter('zed_resolution_width', 2560)  # ZED camera resolution
+        self.declare_parameter('zed_resolution_height', 720)   # ZED camera resolution
+        self.declare_parameter('zed_fps', 30)
         
         # Get parameters
         self.camera_index = self.get_parameter('camera_index').get_parameter_value().integer_value
@@ -44,12 +48,20 @@ class YoloPersonDetectionNode(Node):
         self.confidence_threshold = self.get_parameter('confidence_threshold').get_parameter_value().double_value
         self.use_cuda = self.get_parameter('use_cuda').get_parameter_value().bool_value
         self.force_cpu = self.get_parameter('force_cpu').get_parameter_value().bool_value
+        self.zed_width = self.get_parameter('zed_resolution_width').get_parameter_value().integer_value
+        self.zed_height = self.get_parameter('zed_resolution_height').get_parameter_value().integer_value
+        self.zed_fps = self.get_parameter('zed_fps').get_parameter_value().integer_value
+        
+        # Calculate left camera dimensions (ZED outputs side-by-side stereo)
+        self.left_width = self.zed_width // 2
+        self.left_height = self.zed_height
         
         # Initialize CV bridge
         self.bridge = CvBridge()
         
-        # Publishers
-        self.image_pub = self.create_publisher(Image, 'detection_image', 10)
+        # Publishers - Updated topic names for ZED
+        self.left_image_pub = self.create_publisher(Image, 'zed/left/detection_image', 10)
+        self.left_raw_pub = self.create_publisher(Image, 'zed/left/image_raw', 10)
         self.person_detected_pub = self.create_publisher(Bool, 'person_width_exceeded', 10)
         
         # Check and setup CUDA
@@ -67,13 +79,13 @@ class YoloPersonDetectionNode(Node):
             self.get_logger().error(f'Failed to load YOLO model: {str(e)}')
             return
         
-        # Initialize video capture with better error handling
-        self.get_logger().info(f'Opening camera {self.camera_index}')
+        # Initialize ZED camera with better error handling
+        self.get_logger().info(f'Opening ZED camera {self.camera_index}')
         self.cap = None
-        self.initialize_camera()
+        self.initialize_zed_camera()
         
         if self.cap is None or not self.cap.isOpened():
-            self.get_logger().error(f'Failed to open camera {self.camera_index}')
+            self.get_logger().error(f'Failed to open ZED camera {self.camera_index}')
             return
         
         # Timer for processing at specified rate
@@ -82,16 +94,18 @@ class YoloPersonDetectionNode(Node):
         
         # Thread safety and memory management
         self.frame_lock = threading.Lock()
-        self.latest_frame = None
+        self.latest_stereo_frame = None
+        self.latest_left_frame = None
         self.running = True
         self.memory_check_counter = 0
         
         # Start frame capture thread
-        self.capture_thread = threading.Thread(target=self.capture_frames)
+        self.capture_thread = threading.Thread(target=self.capture_zed_frames)
         self.capture_thread.daemon = True
         self.capture_thread.start()
         
-        self.get_logger().info(f'Node initialized - Rate: {self.publish_rate} Hz, Width threshold: {self.width_threshold}px, Device: {self.device}')
+        self.get_logger().info(f'ZED Node initialized - Rate: {self.publish_rate} Hz, Width threshold: {self.width_threshold}px, Device: {self.device}')
+        self.get_logger().info(f'ZED Resolution: {self.zed_width}x{self.zed_height}, Left camera: {self.left_width}x{self.left_height}')
     
     def setup_device(self):
         """Setup and validate CUDA device"""
@@ -132,62 +146,104 @@ class YoloPersonDetectionNode(Node):
             self.get_logger().error(f"Error checking CUDA: {e}")
             return 'cpu'
     
-    def initialize_camera(self):
-        """Initialize camera with robust error handling"""
+    def initialize_zed_camera(self):
+        """Initialize ZED camera with robust error handling"""
         try:
             self.cap = cv2.VideoCapture(self.camera_index)
             
             if not self.cap.isOpened():
-                self.get_logger().error(f'Failed to open camera {self.camera_index}')
+                self.get_logger().error(f'Failed to open ZED camera {self.camera_index}')
                 return
             
-            # Set camera properties with error checking
+            # Set ZED camera properties with error checking
             properties = [
-                (cv2.CAP_PROP_FRAME_WIDTH, 640),
-                (cv2.CAP_PROP_FRAME_HEIGHT, 480),
-                (cv2.CAP_PROP_FPS, 30),
+                (cv2.CAP_PROP_FRAME_WIDTH, self.zed_width),
+                (cv2.CAP_PROP_FRAME_HEIGHT, self.zed_height),
+                (cv2.CAP_PROP_FPS, self.zed_fps),
                 (cv2.CAP_PROP_BUFFERSIZE, 1)  # Reduce buffer to prevent memory buildup
             ]
             
             for prop, value in properties:
                 if not self.cap.set(prop, value):
-                    self.get_logger().warn(f'Failed to set camera property {prop} to {value}')
+                    self.get_logger().warn(f'Failed to set ZED camera property {prop} to {value}')
             
-            # Verify camera is working
+            # Verify ZED camera is working and get actual resolution
             ret, test_frame = self.cap.read()
             if ret:
-                self.get_logger().info(f'Camera initialized successfully - Frame shape: {test_frame.shape}')
+                actual_height, actual_width = test_frame.shape[:2]
+                self.get_logger().info(f'ZED camera initialized successfully - Actual frame shape: {test_frame.shape}')
+                
+                # Update dimensions based on actual frame size
+                if actual_width != self.zed_width:
+                    self.get_logger().warn(f'Expected width {self.zed_width}, got {actual_width}. Adjusting...')
+                    self.zed_width = actual_width
+                    self.left_width = actual_width // 2
+                
+                if actual_height != self.zed_height:
+                    self.get_logger().warn(f'Expected height {self.zed_height}, got {actual_height}. Adjusting...')
+                    self.zed_height = actual_height
+                    self.left_height = actual_height
+                
+                self.get_logger().info(f'Final ZED dimensions: {self.zed_width}x{self.zed_height}')
+                self.get_logger().info(f'Left camera dimensions: {self.left_width}x{self.left_height}')
+                
                 del test_frame  # Clean up test frame
             else:
-                self.get_logger().error('Camera opened but cannot read frames')
+                self.get_logger().error('ZED camera opened but cannot read frames')
                 self.cap.release()
                 self.cap = None
                 
         except Exception as e:
-            self.get_logger().error(f'Error initializing camera: {e}')
+            self.get_logger().error(f'Error initializing ZED camera: {e}')
             if self.cap:
                 self.cap.release()
             self.cap = None
     
-    def capture_frames(self):
-        """Continuously capture frames from camera in separate thread with memory management"""
+    def split_stereo_frame(self, stereo_frame):
+        """Split ZED stereo frame into left and right images"""
+        try:
+            height, width = stereo_frame.shape[:2]
+            mid_point = width // 2
+            
+            # Extract left and right frames
+            left_frame = stereo_frame[:, :mid_point]
+            right_frame = stereo_frame[:, mid_point:]
+            
+            return left_frame, right_frame
+            
+        except Exception as e:
+            self.get_logger().error(f'Error splitting stereo frame: {e}')
+            return None, None
+    
+    def capture_zed_frames(self):
+        """Continuously capture frames from ZED camera in separate thread with memory management"""
         frame_count = 0
         
         while self.running and rclpy.ok():
             try:
                 if self.cap is None or not self.cap.isOpened():
-                    self.get_logger().warn('Camera not available, retrying...')
-                    self.initialize_camera()
+                    self.get_logger().warn('ZED camera not available, retrying...')
+                    self.initialize_zed_camera()
                     if self.cap is None:
                         rclpy.sleep_for(1.0)  # Wait before retry
                         continue
                 
-                ret, frame = self.cap.read()
+                ret, stereo_frame = self.cap.read()
                 if ret:
-                    with self.frame_lock:
-                        if self.latest_frame is not None:
-                            del self.latest_frame
-                        self.latest_frame = frame.copy()
+                    # Split stereo frame into left and right
+                    left_frame, right_frame = self.split_stereo_frame(stereo_frame)
+                    
+                    if left_frame is not None:
+                        with self.frame_lock:
+                            # Clean up previous frames
+                            if self.latest_stereo_frame is not None:
+                                del self.latest_stereo_frame
+                            if self.latest_left_frame is not None:
+                                del self.latest_left_frame
+                            
+                            # Store new frames
+                            self.latest_stereo_frame = stereo_frame.copy()
+                            self.latest_left_frame = left_frame.copy()
                     
                     # Memory cleanup every 100 frames
                     frame_count += 1
@@ -196,11 +252,11 @@ class YoloPersonDetectionNode(Node):
                         if self.device == 'cuda':
                             torch.cuda.empty_cache()
                 else:
-                    self.get_logger().warn('Failed to read frame from camera')
+                    self.get_logger().warn('Failed to read frame from ZED camera')
                     rclpy.sleep_for(0.1)
                     
             except Exception as e:
-                self.get_logger().error(f'Error in capture thread: {e}')
+                self.get_logger().error(f'Error in ZED capture thread: {e}')
                 rclpy.sleep_for(0.1)
     
     def detect_persons(self, frame):
@@ -286,10 +342,15 @@ class YoloPersonDetectionNode(Node):
             cv2.putText(annotated_frame, label, (x1, y1 - 5), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
         
-        # Draw threshold and device info
-        info_text = f'Threshold: {self.width_threshold}px | Rate: {self.publish_rate}Hz | Device: {self.device}'
+        # Draw threshold and device info for ZED
+        info_text = f'ZED Left | Threshold: {self.width_threshold}px | Rate: {self.publish_rate}Hz | Device: {self.device}'
         cv2.putText(annotated_frame, info_text, (10, 30), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        
+        # Add resolution info
+        res_text = f'Resolution: {self.left_width}x{self.left_height}'
+        cv2.putText(annotated_frame, res_text, (10, 60), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         
         return annotated_frame
     
@@ -314,29 +375,38 @@ class YoloPersonDetectionNode(Node):
         """Main processing function called by timer with memory management"""
         try:
             with self.frame_lock:
-                if self.latest_frame is None:
+                if self.latest_left_frame is None:
                     return
-                frame = self.latest_frame.copy()
+                left_frame = self.latest_left_frame.copy()
             
             # Monitor memory usage
             self.monitor_memory()
             
-            # Detect persons
-            person_boxes = self.detect_persons(frame)
+            # Detect persons on left image only
+            person_boxes = self.detect_persons(left_frame)
             
             # Check width threshold
             width_exceeded = self.check_width_threshold(person_boxes)
             
-            # Draw detections on frame
-            annotated_frame = self.draw_detections(frame, person_boxes)
+            # Draw detections on left frame
+            annotated_left_frame = self.draw_detections(left_frame, person_boxes)
             
             # Publish results
             try:
-                # Publish annotated image
-                image_msg = self.bridge.cv2_to_imgmsg(annotated_frame, encoding='bgr8')
-                image_msg.header.stamp = self.get_clock().now().to_msg()
-                image_msg.header.frame_id = 'camera_frame'
-                self.image_pub.publish(image_msg)
+                # Create timestamp
+                timestamp = self.get_clock().now().to_msg()
+                
+                # Publish raw left image
+                left_raw_msg = self.bridge.cv2_to_imgmsg(left_frame, encoding='bgr8')
+                left_raw_msg.header.stamp = timestamp
+                left_raw_msg.header.frame_id = 'zed_left_camera_frame'
+                self.left_raw_pub.publish(left_raw_msg)
+                
+                # Publish annotated left image with detections
+                left_detection_msg = self.bridge.cv2_to_imgmsg(annotated_left_frame, encoding='bgr8')
+                left_detection_msg.header.stamp = timestamp
+                left_detection_msg.header.frame_id = 'zed_left_camera_frame'
+                self.left_image_pub.publish(left_detection_msg)
                 
                 # Publish boolean result
                 bool_msg = Bool()
@@ -345,13 +415,13 @@ class YoloPersonDetectionNode(Node):
                 
                 # Log detection info
                 if person_boxes:
-                    self.get_logger().debug(f'Detected {len(person_boxes)} persons, width exceeded: {width_exceeded}')
+                    self.get_logger().debug(f'ZED Left: Detected {len(person_boxes)} persons, width exceeded: {width_exceeded}')
                     
             except Exception as e:
-                self.get_logger().error(f'Error publishing messages: {str(e)}')
+                self.get_logger().error(f'Error publishing ZED messages: {str(e)}')
             
             # Clean up frame references
-            del frame, annotated_frame
+            del left_frame, annotated_left_frame
             
             # Periodic garbage collection
             if self.memory_check_counter % 50 == 0:
@@ -367,7 +437,7 @@ class YoloPersonDetectionNode(Node):
     
     def destroy_node(self):
         """Clean up resources"""
-        self.get_logger().info('Shutting down node...')
+        self.get_logger().info('Shutting down ZED node...')
         
         # Stop capture thread
         self.running = False
@@ -376,10 +446,10 @@ class YoloPersonDetectionNode(Node):
         if hasattr(self, 'capture_thread') and self.capture_thread.is_alive():
             self.capture_thread.join(timeout=2.0)
         
-        # Release camera
+        # Release ZED camera
         if hasattr(self, 'cap') and self.cap is not None and self.cap.isOpened():
             self.cap.release()
-            self.get_logger().info('Camera released')
+            self.get_logger().info('ZED camera released')
         
         # Clear CUDA cache
         if self.device == 'cuda':
@@ -397,7 +467,7 @@ def main(args=None):
     
     node = None
     try:
-        node = YoloPersonDetectionNode()
+        node = ZedYoloPersonDetectionNode()
         rclpy.spin(node)
     except KeyboardInterrupt:
         print("Keyboard interrupt received")
