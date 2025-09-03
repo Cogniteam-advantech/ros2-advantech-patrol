@@ -37,6 +37,12 @@ def generate_launch_description():
         'bringup_launch.py'
     )
 
+    tf_devices_launch = os.path.join(
+        get_package_share_directory('advantech_patrol'),
+        'launch',
+        'tf_devices_launch.launch.py'
+    )
+
    
 
     # Define the Advantech Patrol node
@@ -74,6 +80,10 @@ def generate_launch_description():
 
     tf_to_poses_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(tf_to_poses_launch)
+    )
+
+    tf_devices_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(tf_devices_launch)
     )
    
     # Create and return the LaunchDescription with all actions
