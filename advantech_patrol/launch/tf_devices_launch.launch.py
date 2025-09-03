@@ -10,8 +10,8 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='lidar_static_tf_publisher',
         arguments=[
-            '0', '0', '0.4',        # x, y, z translation
-            '3.14159', '0', '0',    # roll, pitch, yaw (180° roll = π radians)
+            '0', '0', '0.35',        # x, y, z translation
+            '0', '0', '3.14159',    # roll, pitch, yaw (180° roll = π radians)
             'base_link',            # parent frame
             'laser'                 # child frame
         ],
