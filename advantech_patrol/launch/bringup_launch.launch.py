@@ -88,11 +88,11 @@ def generate_launch_description():
    
     # Create and return the LaunchDescription with all actions
     return LaunchDescription([
-        advantech_patrol_node,  # Launch the Advantech Patrol node
+        # advantech_patrol_node,  # Launch the Advantech Patrol node
         advantech_camera_ai_node,
-        slam_async_launch,      # Include SLAM Toolbox async launch
+        # slam_async_launch,      # Include SLAM Toolbox async launch
         tracer_launch,
-        nav2_launch,
+        # nav2_launch,
         rplidar_launch,
         tf_to_poses_launch,
         tf_devices_launch
