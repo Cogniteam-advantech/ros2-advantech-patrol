@@ -199,60 +199,64 @@ class SLlidarNode : public rclcpp::Node
     }
 
     void publish_scan(rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr& pub,
-                  sl_lidar_response_measurement_node_hq_t *nodes,
-                  size_t node_count, rclcpp::Time start,
-                  double scan_time, bool inverted,
-                  float angle_min, float angle_max,
-                  float max_distance,
-                  std::string frame_id)
-    {
-        static int scan_count = 0;
-        auto scan_msg = std::make_shared<sensor_msgs::msg::LaserScan>();
+                    sl_lidar_response_measurement_node_hq_t *nodes,
+                    size_t node_count, rclcpp::Time start,
+                    double scan_time, bool inverted,
+                    float angle_min, float angle_max,
+                    float max_distance,
+                    std::string frame_id)
+        {
+            static int scan_count = 0;
+            auto scan_msg = std::make_shared<sensor_msgs::msg::LaserScan>();
 
-        scan_msg->header.stamp = start;
-        scan_msg->header.frame_id = frame_id;
-        scan_count++;
+            scan_msg->header.stamp = start;
+            scan_msg->header.frame_id = frame_id;
+            scan_count++;
 
-        bool reversed = (angle_max > angle_min);
-        if ( reversed ) {
-            scan_msg->angle_min =  M_PI - angle_max;
-            scan_msg->angle_max =  M_PI - angle_min;
-        } else {
-            scan_msg->angle_min =  M_PI - angle_min;
-            scan_msg->angle_max =  M_PI - angle_max;
-        }
-        scan_msg->angle_increment = (scan_msg->angle_max - scan_msg->angle_min) / (double)(node_count-1);
-
-        scan_msg->scan_time = scan_time;
-        scan_msg->time_increment = scan_time / (double)(node_count-1);
-        scan_msg->range_min = 0.05;
-        scan_msg->range_max = max_distance;//8.0;
-
-        scan_msg->intensities.resize(node_count);
-        scan_msg->ranges.resize(node_count);
-        bool reverse_data = (!inverted && reversed) || (inverted && !reversed);
-        if (!reverse_data) {
-            for (size_t i = 0; i < node_count; i++) {
-                float read_value = (float) nodes[i].dist_mm_q2/4.0f/1000;
-                if (read_value == 0.0)
-                    scan_msg->ranges[i] = std::numeric_limits<float>::infinity();
-                else
-                    scan_msg->ranges[i] = read_value;
-                scan_msg->intensities[i] = (float) (nodes[i].quality >> 2);
+            bool reversed = (angle_max > angle_min);
+            if ( reversed ) {
+                scan_msg->angle_min =  M_PI - angle_max;
+                scan_msg->angle_max =  M_PI - angle_min;
+            } else {
+                scan_msg->angle_min =  M_PI - angle_min;
+                scan_msg->angle_max =  M_PI - angle_max;
             }
-        } else {
-            for (size_t i = 0; i < node_count; i++) {
-                float read_value = (float)nodes[i].dist_mm_q2/4.0f/1000;
-                if (read_value == 0.0)
-                    scan_msg->ranges[node_count-1-i] = std::numeric_limits<float>::infinity();
-                else
-                    scan_msg->ranges[node_count-1-i] = read_value;
-                scan_msg->intensities[node_count-1-i] = (float) (nodes[i].quality >> 2);
-            }
-        }
+            scan_msg->angle_increment = (scan_msg->angle_max - scan_msg->angle_min) / (double)(node_count-1);
 
-        pub->publish(*scan_msg);
-    }
+            scan_msg->scan_time = scan_time;
+            scan_msg->time_increment = scan_time / (double)(node_count-1);
+            scan_msg->range_min = 0.3;  // Changed from 0.05 to 0.3 to reflect the minimum filtered distance
+            scan_msg->range_max = max_distance;//8.0;
+
+            scan_msg->intensities.resize(node_count);
+            scan_msg->ranges.resize(node_count);
+            bool reverse_data = (!inverted && reversed) || (inverted && !reversed);
+            
+            // Define minimum distance filter
+            const float min_distance_filter = 0.3f; // 0.3 meters
+            
+            if (!reverse_data) {
+                for (size_t i = 0; i < node_count; i++) {
+                    float read_value = (float) nodes[i].dist_mm_q2/4.0f/1000;
+                    if (read_value == 0.0 || read_value < min_distance_filter)
+                        scan_msg->ranges[i] = std::numeric_limits<float>::infinity();
+                    else
+                        scan_msg->ranges[i] = read_value;
+                    scan_msg->intensities[i] = (float) (nodes[i].quality >> 2);
+                }
+            } else {
+                for (size_t i = 0; i < node_count; i++) {
+                    float read_value = (float)nodes[i].dist_mm_q2/4.0f/1000;
+                    if (read_value == 0.0 || read_value < min_distance_filter)
+                        scan_msg->ranges[node_count-1-i] = std::numeric_limits<float>::infinity();
+                    else
+                        scan_msg->ranges[node_count-1-i] = read_value;
+                    scan_msg->intensities[node_count-1-i] = (float) (nodes[i].quality >> 2);
+                }
+            }
+
+            pub->publish(*scan_msg);
+        }
 public:    
     int work_loop()
     {        
