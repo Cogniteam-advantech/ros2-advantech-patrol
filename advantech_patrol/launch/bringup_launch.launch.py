@@ -43,14 +43,20 @@ def generate_launch_description():
         'tf_devices_launch.launch.py'
     )
 
-   
-
-    # Define the Advantech Patrol node
+    # Define the Advantech Patrol node with waypoint parameters
     advantech_patrol_node = Node(
         package='advantech_patrol',
         executable='advantech_patrol_node',
         name='advantech_patrol_node',
-        output='screen'
+        output='screen',
+        parameters=[{
+            'waypoint1.x': 0.0,
+            'waypoint1.y': 0.0,
+            'waypoint1.rad': 0.0,
+            'waypoint2.x': 3.0,
+            'waypoint2.y': 0.0,
+            'waypoint2.rad': 3.14
+        }]
     )
 
     # Define the advantech camera AI node

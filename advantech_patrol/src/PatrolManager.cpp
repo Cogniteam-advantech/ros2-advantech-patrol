@@ -267,17 +267,43 @@ void PatrolManager::run()
 {
     auto nav_manager = std::make_shared<Nav2GoalManager>();
 
+    // Declare and get waypoint parameters
+    this->declare_parameter("waypoint1.x", -3.0);
+    this->declare_parameter("waypoint1.y", 0.0);
+    this->declare_parameter("waypoint1.rad", 0.0);
+    
+    this->declare_parameter("waypoint2.x", -3.0);
+    this->declare_parameter("waypoint2.y", 3.0);
+    this->declare_parameter("waypoint2.rad", 3.14);
+
+    // Get waypoint parameters
+    double wp1_x, wp1_y, wp1_rad;
+    double wp2_x, wp2_y, wp2_rad;
+    
+    this->get_parameter("waypoint1.x", wp1_x);
+    this->get_parameter("waypoint1.y", wp1_y);
+    this->get_parameter("waypoint1.rad", wp1_rad);
+    
+    this->get_parameter("waypoint2.x", wp2_x);
+    this->get_parameter("waypoint2.y", wp2_y);
+    this->get_parameter("waypoint2.rad", wp2_rad);
+
+    // Create waypoints with parameters
     WayPoint p1;
-    p1.x = -3.0;
-    p1.rad = 0.0;
+    p1.x = wp1_x;
+    p1.y = wp1_y;
+    p1.rad = wp1_rad;
 
     WayPoint p2;
-    p2.x = -3.0;
-    p2.y = 3.0;
-    p2.rad = 3.14;
+    p2.x = wp2_x;
+    p2.y = wp2_y;
+    p2.rad = wp2_rad;
 
     waypoints_.push_back(p1);
     waypoints_.push_back(p2);
+    
+    RCLCPP_INFO(this->get_logger(), "Waypoint 1: x=%.2f, y=%.2f, rad=%.2f", wp1_x, wp1_y, wp1_rad);
+    RCLCPP_INFO(this->get_logger(), "Waypoint 2: x=%.2f, y=%.2f, rad=%.2f", wp2_x, wp2_y, wp2_rad);
     
     //verify amcl works and the robot have location
     bool recv_map_odom = false;
