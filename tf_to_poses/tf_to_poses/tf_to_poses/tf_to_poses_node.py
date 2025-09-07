@@ -34,8 +34,8 @@ class MyTransformNode(Node):
             PoseStamped, '/tf_'+self.base_frame, 10)
         self.pose_publisher_laser = self.create_publisher(
             PoseStamped, '/tf_'+self.laser_frame, 10)
-        self.pose_publisher_camera = self.create_publisher(
-            PoseStamped, '/tf_'+self.camera_frame, 10)      
+        # self.pose_publisher_camera = self.create_publisher(
+        #     PoseStamped, '/tf_'+self.camera_frame, 10)      
           
 
         # Parameters for timer rates
@@ -59,10 +59,10 @@ class MyTransformNode(Node):
             robot_pose_msg = self.create_pose_msg(robot_transform)            
             self.pose_publisher_base.publish(robot_pose_msg)
 
-            camera_transform = self.tf_buffer.lookup_transform(self.global_frame,
-                self.camera_frame, rclpy.time.Time())            
-            camera_pose_msg = self.create_pose_msg(camera_transform)            
-            self.pose_publisher_camera.publish(camera_pose_msg)
+            # camera_transform = self.tf_buffer.lookup_transform(self.global_frame,
+            #     self.camera_frame, rclpy.time.Time())            
+            # camera_pose_msg = self.create_pose_msg(camera_transform)            
+            # self.pose_publisher_camera.publish(camera_pose_msg)
 
             laser_transform = self.tf_buffer.lookup_transform(self.global_frame,
                 self.laser_frame, rclpy.time.Time())            

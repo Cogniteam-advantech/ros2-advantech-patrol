@@ -29,28 +29,20 @@ ENV PYTHONPATH=/opt/ros/humble/local/lib/python3.10/dist-packages:/opt/ros/humbl
 ENV ROS_PYTHON_VERSION=3
 ENV ROS_VERSION=2
 
-
-
 SHELL ["/bin/bash", "-c"]
 
 # RUN LINE BELOW TO REMOVE debconf ERRORS (MUST RUN BEFORE ANY apt-get CALLS)
-
 RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 RUN apt-get update && apt-get upgrade -y && apt-get -y install python3-pip && apt-get install -y --no-install-recommends apt-utils
 
 # Install dependencies
-
 RUN apt-get install build-essential git cmake libasio-dev -y
 
 RUN apt install ros-humble-tf2-geometry-msgs -y
 
-
-
 RUN apt install -y can-utils iproute2
 RUN apt update && apt install -y can-utils
 RUN apt install -y can-utils iproute2 net-tools
-
-
 
 # Create setup script that will be run when container starts
 RUN echo '#!/bin/bash\n\
@@ -62,9 +54,6 @@ ip link set can0 type can bitrate 500000 2>/dev/null || echo "Failed to configur
 ip link set can0 up 2>/dev/null || echo "Failed to bring up can0 - check hardware connection"\n\
 echo "CAN setup completed"\n\
 exec "$@"' > /setup_can.sh && chmod +x /setup_can.sh
-
-
-
 
 # nav2
 # Install required ROS 2 packages
@@ -81,8 +70,35 @@ RUN apt-get update && \
     ros-humble-tf-transformations \
     python3-pip
 
-
-RUN  pip3 install pyyaml
+RUN pip3 install pyyaml
 
 RUN pip3 install ultralytics opencv-python
 
+# Create startup entrypoint script
+RUN echo '#!/bin/bash\n\
+echo "Starting container initialization..."\n\
+\n\
+# Source ROS2 environment\n\
+source /opt/ros/humble/setup.bash\n\
+\n\
+# Run your required initialization command\n\
+if [ -f "src/ros2-advantech-patrol/ugv/scripts/bringup_can2usb_500k.bash" ]; then\n\
+    echo "Running bringup_can2usb_500k.bash..."\n\
+    bash src/ros2-advantech-patrol/ugv/scripts/bringup_can2usb_500k.bash\n\
+    echo "bringup_can2usb_500k.bash completed"\n\
+else\n\
+    echo "Warning: bringup_can2usb_500k.bash not found at expected location"\n\
+fi\n\
+\n\
+echo "Container initialization complete"\n\
+\n\
+# Execute any additional commands passed to docker run\n\
+# If no command is passed, start an interactive bash shell\n\
+if [ $# -eq 0 ]; then\n\
+    exec bash\n\
+else\n\
+    exec "$@"\n\
+fi' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+# Set the entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
