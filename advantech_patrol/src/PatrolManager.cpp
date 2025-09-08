@@ -249,6 +249,11 @@ PatrolManager::PatrolManager() : Node("platril_manager")
         "/start_patrol", 1,
         std::bind(&PatrolManager::startCallback, this, std::placeholders::_1));
     
+    // Initialize subscribers
+    stop_patrol_sub_ = this->create_subscription<std_msgs::msg::Empty>(
+        "/stop_patrol", 1,
+        std::bind(&PatrolManager::stopPatrolCallback, this, std::placeholders::_1));
+
     // Initialize service client
     clear_costmaps_client_ = this->create_client<std_srvs::srv::Empty>(
         "/global_costmap/clear_entirely_global_costmap");
@@ -342,13 +347,13 @@ void PatrolManager::run()
 
             publishPersonAlarm();			                
 
-            if (person_alarm_) {
+            if (person_alarm_ || stop_cmd_) {
                 // The robot waits for the person to pass
                 while(rclcpp::ok()) {
                     rclcpp::spin_some(shared_from_this());
                     publishPersonAlarm();
 
-                    if (person_alarm_ == false) {													
+                    if (person_alarm_ == false && stop_cmd_ == false) {													
                         break;
                     } 
                 }
@@ -367,7 +372,7 @@ void PatrolManager::run()
                 publishWaypointsWithStatus();
                 publishPersonAlarm();
 
-                if (person_alarm_){
+                if (person_alarm_ || stop_cmd_ ){
                     nav_manager->abortGoal();
 
                     while(rclcpp::ok()) {                            
@@ -376,7 +381,7 @@ void PatrolManager::run()
 
                         publishPersonAlarm();
 
-                        if (person_alarm_ == false) {                                   
+                        if (person_alarm_ == false && stop_cmd_ == false) {                                   
                             //clearAllCostMaps();
 
                             // The robot continues the navigation to the same point it canceled
@@ -444,7 +449,7 @@ void PatrolManager::publishPersonAlarm()
     line_strip.lifetime = rclcpp::Duration::from_seconds(1.0);
     line_strip.type = visualization_msgs::msg::Marker::LINE_STRIP;
     
-    if (person_alarm_) {
+    if (person_alarm_ || stop_cmd_) {
         line_strip.scale.x = 0.1;
         line_strip.color.b = 0.0;
         line_strip.color.g = 0.0;
@@ -484,3 +489,15 @@ void PatrolManager::startCallback(const std_msgs::msg::Bool::SharedPtr msg)
         RCLCPP_INFO(this->get_logger(), "Patrol start command received");
     }
 }
+
+void PatrolManager::stopPatrolCallback(const std_msgs::msg::Empty::SharedPtr msg) 
+{  
+
+    if (stop_cmd_ == false){
+        stop_cmd_ = true;
+    } else  if (stop_cmd_ == true){
+        stop_cmd_ = false;
+    }
+}
+
+

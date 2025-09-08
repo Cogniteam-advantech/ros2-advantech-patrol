@@ -20,6 +20,7 @@
 
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <std_msgs/msg/empty.hpp>
 #include <nav_msgs/msg/path.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -105,6 +106,8 @@ private:
     // Callback methods
     void person_width_callback(const std_msgs::msg::Bool::SharedPtr msg);
     void startCallback(const std_msgs::msg::Bool::SharedPtr msg);
+    void stopPatrolCallback(const std_msgs::msg::Empty::SharedPtr msg); 
+
     
     // Utility methods
     bool checkLocalizationOk();
@@ -125,6 +128,7 @@ private:
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr person_width_exceeded_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr start_patrol_sub_;
+    rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr stop_patrol_sub_;    
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr objects_string_sub_;
     
     // Service clients
@@ -149,6 +153,7 @@ private:
     bool start_patrol_cmd_ = false;
     bool person_alarm_ = false;
     std::chrono::steady_clock::time_point last_time_detected_;
+    bool stop_cmd_ = false;
     
     // Path and waypoints
     nav_msgs::msg::Path robot_history_path_msg_;
