@@ -17,8 +17,6 @@ class MyTransformNode(Node):
         self.declare_parameter('laser_frame', 'laser')
         self.laser_frame = self.get_parameter('laser_frame').get_parameter_value().string_value
 
-        self.declare_parameter('camera_frame', 'camera_link')
-        self.camera_frame = self.get_parameter('camera_frame').get_parameter_value().string_value
 
         self.declare_parameter('global_frame', 'map')
         self.global_frame = self.get_parameter('global_frame').get_parameter_value().string_value
@@ -34,19 +32,16 @@ class MyTransformNode(Node):
             PoseStamped, '/tf_'+self.base_frame, 10)
         self.pose_publisher_laser = self.create_publisher(
             PoseStamped, '/tf_'+self.laser_frame, 10)
-        # self.pose_publisher_camera = self.create_publisher(
-        #     PoseStamped, '/tf_'+self.camera_frame, 10)      
-          
+        
 
         # Parameters for timer rates
         self.declare_parameter('map_to_base_rate', self.rate)
         self.declare_parameter('map_to_laser_rate', self.rate)
-        self.declare_parameter('map_to_camera_rate',self.rate)
 
         # Timer      
 
         self.timer = self.create_timer(
-            1.0 / (self.get_parameter('map_to_camera_rate').value),
+            1.0 / self.rate,
             self.tf_to_poses_callback
         )   
     
@@ -59,11 +54,7 @@ class MyTransformNode(Node):
             robot_pose_msg = self.create_pose_msg(robot_transform)            
             self.pose_publisher_base.publish(robot_pose_msg)
 
-            # camera_transform = self.tf_buffer.lookup_transform(self.global_frame,
-            #     self.camera_frame, rclpy.time.Time())            
-            # camera_pose_msg = self.create_pose_msg(camera_transform)            
-            # self.pose_publisher_camera.publish(camera_pose_msg)
-
+           
             laser_transform = self.tf_buffer.lookup_transform(self.global_frame,
                 self.laser_frame, rclpy.time.Time())            
             laser_pose_msg = self.create_pose_msg(laser_transform)            
