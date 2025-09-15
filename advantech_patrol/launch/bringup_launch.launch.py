@@ -53,7 +53,7 @@ def generate_launch_description():
             'waypoint1.x': 0.0,
             'waypoint1.y': 0.0,
             'waypoint1.rad': 0.0,
-            'waypoint2.x': 4.0,
+            'waypoint2.x': 2.0,
             'waypoint2.y': 0.0,
             'waypoint2.rad': 3.14
         }]
