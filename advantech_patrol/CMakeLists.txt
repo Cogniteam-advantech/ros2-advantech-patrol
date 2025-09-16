@@ -37,8 +37,6 @@ include_directories(include)
 # Create library for PatrolManager and MoveBaseController
 add_library(${PROJECT_NAME}_lib
   src/PatrolManager.cpp
-  #src/MoveBaseController.cpp
-  src/LogManager.cpp
 )
 
 # Specify dependencies for the library

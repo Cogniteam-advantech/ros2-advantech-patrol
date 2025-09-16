@@ -362,7 +362,7 @@ void PatrolManager::run()
             //clearAllCostMaps();                
 
             ///////////
-            nav_manager->sendGoal(waypoints_[i].x, waypoints_[i].y, waypoints_[i].rad);
+            nav_manager->sendGoal(waypoints_[i].x, waypoints_[i].y, waypoints_[i].rad, global_frame_);
             
             while (rclcpp::ok() && nav_manager->isGoalActive()) {
                 rclcpp::spin_some(nav_manager);
@@ -385,7 +385,7 @@ void PatrolManager::run()
                             //clearAllCostMaps();
 
                             // The robot continues the navigation to the same point it canceled
-                            nav_manager->sendGoal(waypoints_[i].x, waypoints_[i].y, waypoints_[i].rad);
+                            nav_manager->sendGoal(waypoints_[i].x, waypoints_[i].y, waypoints_[i].rad, global_frame_);
                             break;
                         } 
                     }
