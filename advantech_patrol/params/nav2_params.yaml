@@ -187,6 +187,10 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
+      origin_x: -2.0
+      origin_y: -2.0
+      width: 10
+      height: 10
       update_frequency: 5.0
       publish_frequency: 2.0
       global_frame: odom
