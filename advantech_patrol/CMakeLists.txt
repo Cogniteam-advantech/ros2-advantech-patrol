@@ -117,6 +117,13 @@ install(DIRECTORY config/
   FILES_MATCHING PATTERN "*.yaml"
 )
 
+# Install config files
+install(DIRECTORY params/
+  DESTINATION share/${PROJECT_NAME}/params/
+  FILES_MATCHING PATTERN "*.yaml"
+)
+
+
 # Testing
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
